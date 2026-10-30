@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <script src="https://integration.gamepix.com/sdk/v3/gamepix.sdk.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ai chess game</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="game-container" id="game-container">
+      <div class="game-header" id="game-header">
+        <h1 id="game-title" class="game-title">ai chess game</h1>
+      </div>
+
+     <!-- Game type selection list -->
+      <div id="game-mode-selection" class="game-mode-selection">
+        <h2 id="choose-mode-title">Choose game type</h2>
+        <div class="mode-buttons">
+          <button id="friend-btn" class="mode-btn" onclick="startFriendGame()">👥 Play with a friend</button>
+          <button id="ai-btn" class="mode-btn" onclick="showDifficultySelection()">🤖 Play with AI</button>
+        </div>
+        <div class="frame-selection">
+          <h3 id="square-style-title">Choose square style</h3>
+          <div class="frame-buttons">
+            <button id="square-btn" class="frame-btn active" onclick="setSquareStyle('classic')" data-frame="classic">⬜ square</button>
+            <button id="rounded-btn" class="frame-btn" onclick="setSquareStyle('rounded')" data-frame="rounded">🔘 circular</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Difficulty selection list -->
+      <div id="difficulty-selection" class="difficulty-selection" style="display: none">
+        <h2 id="difficulty-title">Select the difficulty level.</h2>
+        <div class="difficulty-buttons">
+          <button id="easy-btn" class="difficulty-btn easy" onclick="startComputerGame('easy')">😊 easy</button>
+          <button id="medium-btn" class="difficulty-btn medium" onclick="startComputerGame('medium')">😐 medium</button>
+          <button id="hard-btn" class="difficulty-btn hard" onclick="startComputerGame('hard')">😤 hard</button>
+         
+        </div>
+        <button id="back-btn" class="back-btn" onclick="showModeSelection()">← back</button>
+      </div>
+
+      <!-- Game content -->
+      <div id="game-content" class="game-content">
+        <div class="top-controls">
+          <button id="menu-btn" class="back-to-menu-btn icon-btn" onclick="backToMenu()">🏠 Dashboard</button>
+          <button id="reset-btn" class="reset-btn icon-btn" onclick="resetGame()">🔄 new game</button>
+          <button id="fullscreen-btn" class="icon-btn fullscreen-btn" onclick="toggleBoardOnly()">🔍 Fullscreen</button>
+        </div>
+
+        <button id="exit-fullscreen-btn" class="icon-btn exit-fullscreen-btn" onclick="toggleBoardOnly()">✖ Exit</button>
+
+        <div class="game-info-bar">
+          <div class="current-player"><span id="current-turn-label">Current turn:</span> <span id="current-player">⚪</span></div>
+          <div class="game-status" id="game-status"><span id="game-status-message">Make your move.</span></div>
+        </div>
+
+        <!-- Board rotation notification -->
+        <div
+          id="rotation-notification"
+          style="
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white; 
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 1.2em;
+            z-index: 1000;
+          "
+        >
+          🔄 Rotating the patch...
+        </div>
+
+        <div class="board-area">
+          <div class="captured-white">
+            <div id="captured-white-title" class="captured-title">Captured White Pieces</div>
+            <div class="captured-list" id="captured-white"></div>
+          </div>
+
+          <div class="chess-board" id="chess-board">
+            <!-- Squares will be created by JavaScript -->
+          </div>
+
+          <div class="captured-black">
+            <div id="captured-black-title" class="captured-title">Captured Black Pieces</div>
+            <div class="captured-list" id="captured-black"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pawn promotion modal -->
+    <div class="promotion-modal" id="promotion-modal">
+      <div class="promotion-content">
+        <h2 id="promotion-title">Select a part to upgrade.</h2>
+        <div class="promotion-pieces" id="promotion-pieces">
+          <!-- Pieces will be added here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Win modal: shown centered on screen after beating the computer -->
+    <div class="win-modal" id="win-modal">
+      <div class="win-content">
+        <h2 id="win-title">🎉 You won!</h2>
+        <p id="win-subtitle"></p>
+        <div class="win-buttons">
+          <button id="win-next-btn" class="win-next-btn" onclick="advanceToNextDifficulty()">Next Level →</button>
+          <button id="win-close-btn" class="win-close-btn" onclick="closeWinModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+      const translations = {
+        en: {
+          pageTitle: "ai chess game",
+          title: "ai chess game",
+          chooseMode: "Choose game type",
+          playFriend: "👥 Play with a friend",
+          playAI: "🤖 Play with AI",
+          chooseStyle: "Choose square style",
+          square: "⬜ square",
+          rounded: "🔘 circular",
+          selectDifficulty: "Select the difficulty level.",
+          easy: "😊 easy",
+          medium: "😐 medium",
+          hard: "😤 hard",
+          back: "← back",
+          currentTurn: "Current turn:",
+          white: "⚪ White",
+          black: "⚫ Black",
+          status: "Have fun! Make your move.",
+          dashboard: "🏠 Dashboard",
+          reset: "🔄 New game",
+          rotation: "🔄 Rotating the patch...",
+          capturedWhiteTitle: "Captured White Pieces",
+          capturedBlackTitle: "Captured Black Pieces",
+          promotionTitle: "Select a part to upgrade.",
+          languageLabel: "Language:"
+        }
+      };
+
+      const playerValueMap = {
+        en: { white: translations.en.white, black: translations.en.black }
+      };
+
+      function setText(id, text) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+      }
+
+      function localizePlayerValue(lang) {
+        const el = document.getElementById("current-player");
+        if (!el) return;
+        const text = el.textContent.trim();
+        if (text === playerValueMap.en.white) {
+          el.textContent = playerValueMap[lang].white;
+        } else if (text === playerValueMap.en.black) {
+          el.textContent = playerValueMap[lang].black;
+        }
+      }
+
+      function applyLanguage(lang) {
+        const t = translations[lang] || translations.en;
+        document.documentElement.lang = lang;
+        document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+        document.title = t.pageTitle;
+        setText("game-title", t.title);
+        setText("language-label", t.languageLabel);
+        setText("choose-mode-title", t.chooseMode);
+        setText("friend-btn", t.playFriend);
+        setText("ai-btn", t.playAI);
+        setText("square-style-title", t.chooseStyle);
+        setText("square-btn", t.square);
+        setText("rounded-btn", t.rounded);
+        setText("difficulty-title", t.selectDifficulty);
+        setText("easy-btn", t.easy);
+        setText("medium-btn", t.medium);
+        setText("hard-btn", t.hard);
+        setText("back-btn", t.back);
+        setText("current-turn-label", t.currentTurn);
+        localizePlayerValue(lang);
+        setText("game-status-message", t.status);
+        setText("menu-btn", t.dashboard);
+        setText("reset-btn", t.reset);
+        setText("rotation-text", t.rotation);
+        setText("captured-white-title", t.capturedWhiteTitle);
+        setText("captured-black-title", t.capturedBlackTitle);
+        setText("promotion-title", t.promotionTitle);
+        const select = document.getElementById("language-select");
+        if (select) select.value = lang;
+      }
+
+      function changeLanguage(lang) {
+        applyLanguage('en');
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        applyLanguage('en');
+      });
+    </script>
+  </body>
+</html>

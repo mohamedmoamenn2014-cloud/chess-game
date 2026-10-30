@@ -1,0 +1,8 @@
+{
+  "name": "Remix Pro Chess Master 3D",
+  "description": "Realistic 3D animated chess platform featuring Grandmaster AI, live evaluation, tactical puzzles, custom variants, and peer-to-peer multiplayer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

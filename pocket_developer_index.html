@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>شطرنج المحترفين | Pro Chess Master - Pocket Developer Edition</title>
+  <meta name="description" content="لعبة شطرنج كاملة ومستقلة 100% تعمل على Pocket Developer وأي متصفح بدون خادم">
+  <!-- مكتبة الشطرنج الرسمية من CDN مع Fallback -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <!-- مكتبة PeerJS للعب الأونلاين المباشر WebRTC P2P -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #09090b;
+      --card-bg: #18181b;
+      --border-color: #27272a;
+      --accent: #f59e0b;
+      --sq-light: #f0d9b5;
+      --sq-dark: #b58863;
+      --sq-highlight: rgba(245, 158, 11, 0.45);
+      --sq-check: rgba(239, 68, 68, 0.65);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-dark);
+      color: #f4f4f5;
+      font-family: 'Cairo', -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    header {
+      background: #121215;
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 1.15rem;
+      color: var(--accent);
+    }
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    button, select {
+      background: #27272a;
+      color: #fff;
+      border: 1px solid #3f3f46;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s;
+    }
+    button:active { transform: scale(0.97); }
+    button.btn-accent { background: var(--accent); color: #000; border-color: var(--accent); }
+    button.btn-danger { background: #dc2626; border-color: #ef4444; }
+    .main-layout {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      gap: 16px;
+    }
+    @media (min-width: 860px) {
+      .main-layout { flex-direction: row; align-items: flex-start; justify-content: center; }
+    }
+    .board-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 480px;
+    }
+    .player-card {
+      width: 100%;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 10px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 4px 0;
+    }
+    .player-card.active { border-color: var(--accent); box-shadow: 0 0 12px rgba(245, 158, 11, 0.2); }
+    .clock-display {
+      font-family: monospace;
+      font-size: 1.25rem;
+      font-weight: 700;
+      background: #09090b;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid #3f3f46;
+    }
+    .clock-display.low { color: #ef4444; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 3px solid #27272a;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      touch-action: none;
+    }
+    .sq {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+    }
+    .sq.light { background: var(--sq-light); }
+    .sq.dark { background: var(--sq-dark); }
+    .sq.selected { background: #facc15 !important; }
+    .sq.highlight { background: var(--sq-highlight) !important; }
+    .sq.check { background: var(--sq-check) !important; }
+    .sq.hint { outline: 3px dashed #10b981; outline-offset: -3px; }
+    .sq-dot {
+      width: 28%;
+      height: 28%;
+      background: rgba(0,0,0,0.25);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .sq-ring {
+      position: absolute;
+      inset: 6%;
+      border: 4px solid rgba(0,0,0,0.3);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .side-panel {
+      width: 100%;
+      max-width: 480px;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .tab-nav {
+      display: flex;
+      border-bottom: 1px solid #27272a;
+      padding-bottom: 8px;
+      gap: 6px;
+    }
+    .tab-btn {
+      flex: 1;
+      text-align: center;
+      justify-content: center;
+      padding: 8px;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #000;
+    }
+    .history-list {
+      background: #09090b;
+      border-radius: 8px;
+      padding: 8px;
+      height: 120px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-content: flex-start;
+    }
+    .history-move {
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #27272a;
+    }
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+    .modal-card {
+      background: #18181b;
+      border: 1px solid #3f3f46;
+      border-radius: 14px;
+      padding: 20px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+    }
+    .eval-bar-wrapper {
+      width: 100%;
+      height: 12px;
+      background: #27272a;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 8px 0;
+      display: flex;
+    }
+    .eval-white {
+      background: #f4f4f5;
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+    .eval-black {
+      background: #18181b;
+      flex: 1;
+    }
+    svg { width: 85%; height: 85%; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span>♞</span>
+      <span id="title-text">شطرنج المحترفين (Pocket Dev)</span>
+    </div>
+    <div class="controls-bar">
+      <select id="mode-select" onchange="changeMode(this.value)">
+        <option value="vs_computer">🤖 ضد الكمبيوتر</option>
+        <option value="pass_and_play">👥 لاعبين على الجهاز</option>
+        <option value="puzzles">🧩 ألغاز وتكتيكات</option>
+        <option value="online_p2p">🌐 أونلاين مباشر (PeerJS)</option>
+      </select>
+      <select id="diff-select" onchange="changeDifficulty(this.value)">
+        <option value="beginner">مبتدئ (800)</option>
+        <option value="easy">سهل (1200)</option>
+        <option value="medium" selected>متوسط (1600)</option>
+        <option value="hard">متقدم (2000)</option>
+      </select>
+      <button onclick="toggleSound()" id="sound-btn">🔊 صوت</button>
+      <button onclick="flipBoard()">🔄 تدوير</button>
+      <button onclick="resetGame()" class="btn-accent">⚡ جديد</button>
+    </div>
+  </header>
+
+  <main class="main-layout">
+    <div class="board-container">
+      <!-- Player Top (Black) -->
+      <div class="player-card" id="black-card">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:1.4rem;">♟️</span>
+          <div>
+            <div style="font-weight:700;" id="black-name">الأسود / الكمبيوتر</div>
+            <div style="font-size:0.75rem; color:#a1a1aa;" id="black-adv">+0</div>
+          </div>
+        </div>
+        <div class="clock-display" id="black-clock">10:00</div>
+      </div>
+
+      <!-- Eval bar -->
+      <div class="eval-bar-wrapper">
+        <div class="eval-white" id="eval-fill" style="width: 50%;"></div>
+        <div class="eval-black"></div>
+      </div>
+
+      <!-- Chessboard Grid -->
+      <div dir="ltr" class="board-grid" id="board-grid"></div>
+
+      <!-- Player Bottom (White) -->
+      <div class="player-card active" id="white-card">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:1.4rem;">♙</span>
+          <div>
+            <div style="font-weight:700;" id="white-name">الأبيض (أنت)</div>
+            <div style="font-size:0.75rem; color:#a1a1aa;" id="white-adv">+0</div>
+          </div>
+        </div>
+        <div class="clock-display" id="white-clock">10:00</div>
+      </div>
+    </div>
+
+    <!-- Side Panel -->
+    <div class="side-panel">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-weight:800; color:var(--accent);" id="opening-name">الافتتاح: نقلة عادية</span>
+        <button onclick="requestHint()" style="background:#059669; border-color:#10b981;">💡 تلميح</button>
+      </div>
+      <div style="font-size:0.85rem; color:#e4e4e7; background:#09090b; padding:8px; border-radius:8px;" id="game-status-msg">
+        ابدأ المباراة! الأبيض يلعب أولاً.
+      </div>
+
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('moves')">النقلات</button>
+        <button class="tab-btn" onclick="switchTab('online')">أونلاين</button>
+        <button class="tab-btn" onclick="switchTab('puzzle')">اللغز</button>
+      </div>
+
+      <div id="tab-moves">
+        <div class="history-list" id="history-box"></div>
+        <div style="display:flex; gap:6px; margin-top:8px;">
+          <button onclick="undoMove()" style="flex:1;">↩ تراجع</button>
+          <button onclick="offerResign()" class="btn-danger" style="flex:1;">🏳 استسلام</button>
+        </div>
+      </div>
+
+      <div id="tab-online" style="display:none; font-size:0.85rem;">
+        <p style="margin-bottom:8px; color:#d4d4d8;">أنشئ غرفة وشارك الكود مع صديقك للعب بدون خادم:</p>
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <button onclick="initHostRoom()" class="btn-accent" style="flex:1;">إنشاء غرفة كود</button>
+          <button onclick="joinGuestRoom()" style="flex:1;">انضمام بكود</button>
+        </div>
+        <div style="background:#09090b; padding:8px; border-radius:6px; word-break:break-all;" id="online-status">
+          غير متصل بالأونلاين حالياً.
+        </div>
+      </div>
+
+      <div id="tab-puzzle" style="display:none;">
+        <div style="font-weight:700; color:var(--accent); margin-bottom:4px;" id="puzzle-title">لغز تكتيكي</div>
+        <div style="font-size:0.85rem; color:#a1a1aa; margin-bottom:8px;" id="puzzle-desc">ابحث عن أفضل نقلة تكتيكية!</div>
+        <button onclick="loadNextPuzzle()" class="btn-accent" style="width:100%;">اللغز التالي ➔</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Sound & Chess Engine Script -->
+  <script>
+    // Web Audio Synthesizer
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function playTone(freq, duration, type='sine') {
+      if (!soundEnabled) return;
+      if (!audioCtx) audioCtx = new AudioCtx();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+    function playMoveSnd() { playTone(280, 0.08, 'triangle'); }
+    function playCaptureSnd() { playTone(140, 0.15, 'square'); }
+    function playCheckSnd() { playTone(600, 0.25, 'sine'); }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('sound-btn').innerText = soundEnabled ? '🔊 صوت' : '🔇 كتم';
+    }
+
+    // Pieces SVGs
+    const PIECE_SYMBOLS = {
+      w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
+      b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' }
+    };
+
+    // State
+    let game = new Chess();
+    let selectedSquare = null;
+    let boardFlipped = false;
+    let currentMode = 'vs_computer';
+    let currentDifficulty = 'medium';
+    let hintSquare = null;
+    let whiteTime = 600, blackTime = 600;
+    let clockInterval = null;
+
+    // AI Minimax Evaluator
+    const PIECE_VALS = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
+    function evalPosition(g) {
+      if (g.in_checkmate()) return g.turn() === 'w' ? -99999 : 99999;
+      if (g.in_draw()) return 0;
+      let score = 0;
+      const board = g.board();
+      for (let r=0; r<8; r++) {
+        for (let c=0; c<8; c++) {
+          const p = board[r][c];
+          if (!p) continue;
+          const v = PIECE_VALS[p.type] || 0;
+          score += (p.color === 'w' ? v : -v);
+        }
+      }
+      return score;
+    }
+
+    function minimax(g, depth, alpha, beta, isMax) {
+      if (depth === 0 || g.game_over()) return { score: evalPosition(g) };
+      const moves = g.moves({ verbose: true });
+      let bestMove = moves[0];
+      if (isMax) {
+        let maxEval = -Infinity;
+        for (const m of moves) {
+          g.move(m);
+          const ev = minimax(g, depth - 1, alpha, beta, false).score;
+          g.undo();
+          if (ev > maxEval) { maxEval = ev; bestMove = m; }
+          alpha = Math.max(alpha, ev);
+          if (beta <= alpha) break;
+        }
+        return { score: maxEval, bestMove };
+      } else {
+        let minEval = Infinity;
+        for (const m of moves) {
+          g.move(m);
+          const ev = minimax(g, depth - 1, alpha, beta, true).score;
+          g.undo();
+          if (ev < minEval) { minEval = ev; bestMove = m; }
+          beta = Math.min(beta, ev);
+          if (beta <= alpha) break;
+        }
+        return { score: minEval, bestMove };
+      }
+    }
+
+    function renderBoard() {
+      const grid = document.getElementById('board-grid');
+      grid.innerHTML = '';
+      const turn = game.turn();
+      const inCheck = game.in_check();
+
+      for (let i = 0; i < 64; i++) {
+        const row = boardFlipped ? 7 - Math.floor(i / 8) : Math.floor(i / 8);
+        const col = boardFlipped ? 7 - (i % 8) : (i % 8);
+        const file = String.fromCharCode(97 + col);
+        const rank = 8 - row;
+        const squareKey = file + rank;
+
+        const sqDiv = document.createElement('div');
+        sqDiv.className = 'sq ' + ((row + col) % 2 === 0 ? 'light' : 'dark');
+        sqDiv.dataset.square = squareKey;
+
+        if (selectedSquare === squareKey) sqDiv.classList.add('selected');
+        if (hintSquare === squareKey) sqDiv.classList.add('hint');
+
+        const piece = game.get(squareKey);
+        if (piece) {
+          if (piece.type === 'k' && inCheck && piece.color === turn) {
+            sqDiv.classList.add('check');
+          }
+          const span = document.createElement('span');
+          span.style.fontSize = '2.2rem';
+          span.style.lineHeight = '1';
+          span.style.color = piece.color === 'w' ? '#ffffff' : '#18181b';
+          span.style.filter = piece.color === 'w' ? 'drop-shadow(0 1px 2px #000)' : 'drop-shadow(0 1px 2px rgba(255,255,255,0.7))';
+          span.innerText = PIECE_SYMBOLS[piece.color][piece.type];
+          sqDiv.appendChild(span);
+        }
+
+        if (selectedSquare) {
+          const legalMoves = game.moves({ square: selectedSquare, verbose: true });
+          const isLegal = legalMoves.some(m => m.to === squareKey);
+          if (isLegal) {
+            const dot = document.createElement('div');
+            dot.className = piece ? 'sq-ring' : 'sq-dot';
+            sqDiv.appendChild(dot);
+          }
+        }
+
+        sqDiv.onclick = () => onSquareClick(squareKey);
+        grid.appendChild(sqDiv);
+      }
+
+      updateStatusUI();
+    }
+
+    function onSquareClick(square) {
+      if (game.game_over()) return;
+      if (currentMode === 'vs_computer' && game.turn() === 'b') return;
+
+      if (!selectedSquare) {
+        const p = game.get(square);
+        if (p && p.color === game.turn()) {
+          selectedSquare = square;
+          renderBoard();
+        }
+      } else {
+        const move = game.move({ from: selectedSquare, to: square, promotion: 'q' });
+        selectedSquare = null;
+        hintSquare = null;
+        if (move) {
+          handlePostMove(move);
+        } else {
+          const p = game.get(square);
+          if (p && p.color === game.turn()) {
+            selectedSquare = square;
+          }
+          renderBoard();
+        }
+      }
+    }
+
+    function handlePostMove(move) {
+      if (move.captured) playCaptureSnd();
+      else playMoveSnd();
+      if (game.in_check()) playCheckSnd();
+
+      renderBoard();
+      updateHistoryUI(move);
+
+      if (currentMode === 'vs_computer' && !game.game_over() && game.turn() === 'b') {
+        setTimeout(makeAIMove, 250);
+      }
+    }
+
+    function makeAIMove() {
+      const depth = currentDifficulty === 'beginner' ? 1 : (currentDifficulty === 'easy' ? 2 : 3);
+      const res = minimax(game, depth, -Infinity, Infinity, false);
+      if (res.bestMove) {
+        const move = game.move(res.bestMove);
+        if (move) {
+          if (move.captured) playCaptureSnd();
+          else playMoveSnd();
+          if (game.in_check()) playCheckSnd();
+          renderBoard();
+          updateHistoryUI(move);
+        }
+      }
+    }
+
+    function updateStatusUI() {
+      const statusEl = document.getElementById('game-status-msg');
+      if (game.in_checkmate()) {
+        statusEl.innerText = game.turn() === 'w' ? 'كش مات! فاز الأسود 🏆' : 'كش مات! فاز الأبيض 🏆';
+      } else if (game.in_draw()) {
+        statusEl.innerText = 'انتهت المباراة بالتعادل!';
+      } else if (game.in_check()) {
+        statusEl.innerText = 'كش ملك على ' + (game.turn() === 'w' ? 'الأبيض!' : 'الأسود!');
+      } else {
+        statusEl.innerText = 'دور ' + (game.turn() === 'w' ? 'الأبيض للعب' : 'الأسود للعب');
+      }
+
+      // Eval score approx
+      const score = evalPosition(game);
+      const percent = Math.max(5, Math.min(95, 50 + (score / 20)));
+      document.getElementById('eval-fill').style.width = percent + '%';
+    }
+
+    function updateHistoryUI(move) {
+      const box = document.getElementById('history-box');
+      const span = document.createElement('span');
+      span.className = 'history-move';
+      span.innerText = move.san;
+      box.appendChild(span);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function flipBoard() {
+      boardFlipped = !boardFlipped;
+      renderBoard();
+    }
+
+    function resetGame() {
+      game.reset();
+      selectedSquare = null;
+      hintSquare = null;
+      document.getElementById('history-box').innerHTML = '';
+      renderBoard();
+    }
+
+    function requestHint() {
+      const res = minimax(game, 2, -Infinity, Infinity, game.turn() === 'w');
+      if (res.bestMove) {
+        hintSquare = res.bestMove.from;
+        renderBoard();
+      }
+    }
+
+    function undoMove() {
+      game.undo();
+      if (currentMode === 'vs_computer') game.undo();
+      renderBoard();
+    }
+
+    function offerResign() {
+      if (confirm('هل أنت متأكد من الاستسلام؟')) {
+        alert('استسلم اللاعب. انتهت المباراة.');
+        resetGame();
+      }
+    }
+
+    function changeMode(mode) {
+      currentMode = mode;
+      resetGame();
+    }
+
+    function changeDifficulty(diff) {
+      currentDifficulty = diff;
+    }
+
+    function switchTab(tab) {
+      document.getElementById('tab-moves').style.display = tab === 'moves' ? 'block' : 'none';
+      document.getElementById('tab-online').style.display = tab === 'online' ? 'block' : 'none';
+      document.getElementById('tab-puzzle').style.display = tab === 'puzzle' ? 'block' : 'none';
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    }
+
+    // Initialize on ready
+    renderBoard();
+  </script>
+</body>
+</html>
